@@ -94,10 +94,10 @@ def register():
     return jsonify({'message': 'Użytkownik dodany'}), 201
 
 
-""" ---------- Create team, Add user to team, Get my team ---------- """
+""" ---------- Create team, Add user to team, Get my team, Get team's users ---------- """
 
 
-@app.route('/create-team', methods=['POST'])
+@app.route('/teams/create', methods=['POST'])
 @token_required
 def create_team(current_user):
     if not current_user.teacher:
@@ -120,7 +120,7 @@ def create_team(current_user):
     return jsonify({'message': 'Zespół został utworzony'}), 201
 
 
-@app.route('/add-user-to-team/<int:team_id>', methods=['POST'])
+@app.route('/teams/<int:team_id>/add-user', methods=['POST'])
 @token_required
 def add_user_to_team(current_user, team_id):
     if not current_user.teacher:
@@ -130,6 +130,9 @@ def add_user_to_team(current_user, team_id):
 
     if not team:
         return jsonify({'message': 'Zespół o podanym identyfikatorze nie istnieje'}), 404
+
+    if team.creator_id != current_user.id:
+        return jsonify({'message': 'Nie jesteś twórcą tego zespołu'}), 403
 
     data = request.get_json()
     email = data.get('email')
@@ -169,6 +172,31 @@ def get_my_teams(current_user):
             teams.append(team_data)
 
     return jsonify({'my_teams': teams}), 200
+
+
+@app.route('/teams/<int:team_id>/users', methods=['GET'])
+@token_required
+def get_team_users(current_user, team_id):
+    # Sprawdź, czy zalogowany użytkownik jest członkiem zespołu
+    team_member = TeamMember.query.filter_by(team_id=team_id, user_id=current_user.id).first()
+
+    if not team_member:
+        return jsonify({'message': 'Nie jesteś członkiem tego zespołu'}), 403
+
+    # Pobierz listę użytkowników przypisanych do tego zespołu
+    team_users = TeamMember.query.filter_by(team_id=team_id).all()
+    user_list = []
+
+    for team_user in team_users:
+        user = User.query.get(team_user.user_id)
+        user_data = {
+            'id': user.id,
+            'email': user.email,
+            'teacher': user.teacher
+        }
+        user_list.append(user_data)
+
+    return jsonify({'team_users': user_list}), 200
 
 
 # Endpoint do pobierania wszystkich użytkowników
@@ -232,4 +260,3 @@ if __name__ == '__main__':
             db.session.commit()
 
     app.run(debug=True)
-
