@@ -1,7 +1,7 @@
 from flask import Flask
 from functools import wraps
 from flask import request, jsonify
-from models.models import User, db, Team, TeamMember
+from models.models import User, db, Team, TeamMember, Task
 import jwt
 import datetime
 import hashlib
@@ -197,6 +197,130 @@ def get_team_users(current_user, team_id):
         user_list.append(user_data)
 
     return jsonify({'team_users': user_list}), 200
+
+
+# Endpoint do tworzenia zadania
+@app.route('/teams/<int:team_id>/create', methods=['POST'])
+@token_required
+def create_task(current_user, team_id):
+    if not current_user.teacher:
+        return jsonify({'message': 'Nie masz uprawnień do wykonania tej akcji'})
+
+    data = request.get_json()
+    assigned_to_email = data.get('assigned_to_email')
+    content = data.get('content')
+
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({'message': 'Zespół o podanym identyfikatorze nie istnieje'}), 404
+
+    # Sprawdź, czy użytkownik, któremu ma być przypisane zadanie, jest członkiem zespołu
+    assigned_user = User.query.filter_by(email=assigned_to_email).first()
+    if not assigned_user:
+        return jsonify({'message': 'Użytkownik o podanym adresie e-mail nie istnieje'}), 404
+
+    team_member = TeamMember.query.filter_by(team_id=team.id, user_id=assigned_user.id).first()
+    if not team_member:
+        return jsonify({'message': 'Użytkownik nie jest członkiem tego zespołu'}), 403
+
+    new_task = Task(team_id=team_id, assigned_to_user=assigned_user.id, content=content)
+    db.session.add(new_task)
+    db.session.commit()
+
+    return jsonify({'message': 'Zadanie zostało utworzone'}), 201
+
+
+# Endpoint do aktualizowania zadania
+@app.route('/teams/<int:team_id>/<int:task_id>', methods=['PUT'])
+@token_required
+def update_task(current_user, team_id, task_id):
+    if not current_user.teacher:
+        return jsonify({'message': 'Nie masz uprawnień do wykonania tej akcji'})
+
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({'message': 'Zespół o podanym identyfikatorze nie istnieje'}), 404
+
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({'message': 'Zadanie o podanym identyfikatorze nie istnieje'}), 404
+
+    # Sprawdź, czy zadanie należy do zespołu
+    if task.team_id != team.id:
+        return jsonify({'message': 'Zadanie nie należy do tego zespołu'}), 403
+
+    data = request.get_json()
+    content = data.get('content')
+
+    task.content = content
+    db.session.commit()
+
+    return jsonify({'message': 'Zadanie zostało zaktualizowane'}), 200
+
+
+# Endpoint do usuwania zadania
+@app.route('/teams/<int:team_id>/<int:task_id>', methods=['DELETE'])
+@token_required
+def delete_task(current_user, team_id, task_id):
+    if not current_user.teacher:
+        return jsonify({'message': 'Nie masz uprawnień do wykonania tej akcji'})
+
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({'message': 'Zadanie o podanym identyfikatorze nie istnieje'}), 404
+
+    db.session.delete(task)
+    db.session.commit()
+
+    return jsonify({'message': 'Zadanie zostało usunięte'}), 200
+
+
+""" ---------- Pobieranie zadań ---------- """
+
+
+# Endpoint do pobierania wszystkich zadań w obrębie zespołu (dla nauczyciela)
+@app.route('/teams/<int:team_id>/tasks', methods=['GET'])
+@token_required
+def get_all_tasks_in_team(current_user, team_id):
+    if not current_user.teacher:
+        return jsonify({'message': 'Nie masz uprawnień do wykonania tej akcji'})
+
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({'message': 'Zespół o podanym identyfikatorze nie istnieje'}), 404
+
+    tasks = Task.query.filter_by(team_id=team_id).all()
+
+    tasks_data = [
+        {
+            'id': task.id,
+            'team_id': task.team_id,
+            'assigned_to_user': task.assigned_to_user,
+            'content': task.content
+        }
+        for task in tasks
+    ]
+
+    return jsonify({'tasks': tasks_data}), 200
+
+
+# Endpoint do pobierania przypisanych zadań w obrębie zespołu (dla zwykłego użytkownika)
+@app.route('/my-tasks', methods=['GET'])
+@token_required
+def get_my_tasks(current_user):
+    tasks = Task.query.filter_by(assigned_to_user=current_user.id).all()
+
+    tasks_data = [
+        {
+            'id': task.id,
+            'team_id': task.team_id,
+            'assigned_to_user': task.assigned_to_user,
+            'content': task.content
+        }
+        for task in tasks
+    ]
+
+    return jsonify({'tasks': tasks_data}), 200
 
 
 # Endpoint do pobierania wszystkich użytkowników

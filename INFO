@@ -1,0 +1,110 @@
+Endpoint: /login (Metoda: POST)
+
+Cel: Logowanie użytkownika.
+Kto może wykonać: Dostępny dla wszystkich.
+Token w nagłówku: Brak.
+Dane wejściowe: Adres e-mail (email) i hasło (password) w formie JSON.
+
+
+Endpoint: /logout (Metoda: POST)
+
+Cel: Wylogowanie użytkownika.
+Kto może wykonać: Dostępny dla zalogowanych użytkowników.
+Token w nagłówku: Tak.
+
+
+Endpoint: /register (Metoda: POST)
+
+Cel: Rejestracja nowego użytkownika.
+Kto może wykonać: Dostępny dla wszystkich.
+Token w nagłówku: Brak.
+Dane wejściowe: Adres e-mail (email) i hasło (password) w formie JSON.
+
+
+Endpoint: /teams/create (Metoda: POST)
+
+Cel: Tworzenie zespołu.
+Kto może wykonać: Dostępny tylko dla nauczycieli (teacher).
+Token w nagłówku: Tak.
+Dane wejściowe: Nazwa zespołu (name) w formie JSON.
+
+
+Endpoint: /teams/int:team_id/add-user (Metoda: POST)
+
+Cel: Dodawanie użytkownika do zespołu.
+Kto może wykonać: Dostępny tylko dla nauczycieli (teacher).
+Token w nagłówku: Tak.
+Dane wejściowe: Adres e-mail (email) użytkownika w formie JSON.
+
+
+Endpoint: /my-teams (Metoda: GET)
+
+Cel: Pobieranie zespołów, do których zalogowany użytkownik jest przypisany.
+Kto może wykonać: Dostępny dla zalogowanych użytkowników.
+Token w nagłówku: Tak.
+
+
+Endpoint: /teams/int:team_id/users (Metoda: GET)
+
+Cel: Pobieranie użytkowników przypisanych do zespołu.
+Kto może wykonać: Dostępny dla członków zespołu.
+Token w nagłówku: Tak.
+
+
+Endpoint: /teams/int:team_id/create (Metoda: POST)
+
+Cel: Tworzenie zadania w zespole.
+Kto może wykonać: Dostępny tylko dla nauczycieli (teacher).
+Token w nagłówku: Tak.
+Dane wejściowe: E-mail przypisanego użytkownika (assigned_to_email) i treść zadania (content) w formie JSON.
+
+
+Endpoint: /teams/int:team_id/int:task_id (Metoda: PUT)
+
+Cel: Aktualizowanie treści zadania.
+Kto może wykonać: Dostępny tylko dla nauczycieli (teacher).
+Token w nagłówku: Tak.
+Dane wejściowe: Treść zadania (content) w formie JSON.
+
+
+Endpoint: /teams/int:team_id/int:task_id (Metoda: DELETE)
+
+Cel: Usuwanie zadania.
+Kto może wykonać: Dostępny tylko dla nauczycieli (teacher).
+Token w nagłówku: Tak.
+
+
+Endpoint: /teams/int:team_id/tasks (Metoda: GET)
+
+Cel: Pobieranie wszystkich zadań w zespole (dla nauczyciela).
+Kto może wykonać: Dostępny tylko dla nauczycieli (teacher).
+Token w nagłówku: Tak.
+
+
+Endpoint: /my-tasks (Metoda: GET)
+
+Cel: Pobieranie przypisanych zadań w zespole (dla zwykłego użytkownika).
+Kto może wykonać: Dostępny dla zalogowanych użytkowników.
+Token w nagłówku: Tak.
+
+
+Endpoint: /users (Metoda: GET)
+
+Cel: Pobieranie wszystkich użytkowników.
+Kto może wykonać: Dostępny dla zalogowanych użytkowników.
+Token w nagłówku: Tak.
+
+
+Endpoint: /users/int:user_id (Metoda: PUT)
+
+Cel: Modyfikowanie danych użytkownika.
+Kto może wykonać: Dostępny dla zalogowanych użytkowników.
+Token w nagłówku: Tak.
+Dane wejściowe: Nowy adres e-mail (email) lub hasło (password) w formie JSON.
+
+
+Endpoint: /users/int:user_id (Metoda: DELETE)
+
+Cel: Usuwanie użytkownika.
+Kto może wykonać: Dostępny tylko dla nauczycieli (teacher).
+Token w nagłówku: Tak.
