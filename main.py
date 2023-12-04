@@ -214,17 +214,37 @@ def create_task(current_user, team_id):
     if not team:
         return jsonify({'message': 'Zespół o podanym identyfikatorze nie istnieje'}), 404
 
-    # Sprawdź, czy użytkownik, któremu ma być przypisane zadanie, jest członkiem zespołu
-    assigned_user = User.query.filter_by(email=assigned_to_email).first()
-    if not assigned_user:
-        return jsonify({'message': 'Użytkownik o podanym adresie e-mail nie istnieje'}), 404
+    # Sprawdź czy minimum 1 email zotały podany
+    if not assigned_to_email:
+        return jsonify({'message': 'Nie podano adresów e-mail uczniów'}), 400
 
-    team_member = TeamMember.query.filter_by(team_id=team.id, user_id=assigned_user.id).first()
-    if not team_member:
-        return jsonify({'message': 'Użytkownik nie jest członkiem tego zespołu'}), 403
+    # # Sprawdź, czy użytkownik, któremu ma być przypisane zadanie, jest członkiem zespołu
+    # assigned_user = User.query.filter_by(email=assigned_to_email).first()
+    # if not assigned_user:
+    #     return jsonify({'message': 'Użytkownik o podanym adresie e-mail nie istnieje'}), 404
+    #
+    # team_member = TeamMember.query.filter_by(team_id=team.id, user_id=assigned_user.id).first()
+    # if not team_member:
+    #     return jsonify({'message': 'Użytkownik nie jest członkiem tego zespołu'}), 403
+    #
+    # new_task = Task(team_id=team_id, assigned_to_user=assigned_user.id, content=content)
+    # db.session.add(new_task)
+    # db.session.commit()
 
-    new_task = Task(team_id=team_id, assigned_to_user=assigned_user.id, content=content)
-    db.session.add(new_task)
+
+    #Przypisane zadania do każdego ucznia
+    for emails in assigned_to_email:
+        assigned_user = User.query.filter_by(email=emails).first()
+        if not assigned_user:
+            return jsonify({'message': 'Użytkownik o podanym adresie e-mail nie istnieje'}), 404
+
+        team_member = TeamMember.query.filter_by(team_id=team.id, user_id=assigned_user.id).first()
+        if not team_member:
+            return jsonify({'message': 'Użytkownik nie jest członkiem tego zespołu'}), 403
+
+        new_task = Task(team_id=team_id, assigned_to_user=assigned_user.id, content=content)
+        db.session.add(new_task)
+
     db.session.commit()
 
     return jsonify({'message': 'Zadanie zostało utworzone'}), 201
