@@ -1,15 +1,26 @@
 from flask import Flask
 from functools import wraps
-from flask import request, jsonify
+from flask import request, jsonify, send_file
 from models.models import User, db, Team, TeamMember, Task
 import jwt
 import datetime
 import hashlib
+from werkzeug.utils import secure_filename
+import os
+
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'pdf', 'txt'}
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mydatabase.db'
 app.config['SECRET_KEY'] = 'thisissecret'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 db.init_app(app)
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 """ ---------- Check user token ---------- """
 
@@ -120,6 +131,33 @@ def create_team(current_user):
     return jsonify({'message': 'Zespół został utworzony'}), 201
 
 
+@app.route('/teams/<int:team_id>/delete', methods=['DELETE'])
+@token_required
+def delete_team(current_user, team_id):
+    if not current_user.teacher:
+        return jsonify({'message': 'Nie masz uprawnień do wykonania tej akcji'})
+
+    team = Team.query.get(team_id)
+    if not team:
+        return jsonify({'message': 'Zespół o podanym identyfikatorze nie istnieje'}), 404
+
+    # Usuń członków zespołu
+    team_members = TeamMember.query.filter_by(team_id=team_id).all()
+    for team_member in team_members:
+        db.session.delete(team_member)
+
+    # Usuń zadania związane z zespołem
+    tasks = Task.query.filter_by(team_id=team_id).all()
+    for task in tasks:
+        db.session.delete(task)
+
+    # Usuń zespół
+    db.session.delete(team)
+    db.session.commit()
+
+    return jsonify({'message': 'Zespół został usunięty wraz z członkami i zadaniami'}), 200
+
+
 @app.route('/teams/<int:team_id>/add-user', methods=['POST'])
 @token_required
 def add_user_to_team(current_user, team_id):
@@ -218,22 +256,9 @@ def create_task(current_user, team_id):
     if not assigned_to_email:
         return jsonify({'message': 'Nie podano adresów e-mail uczniów'}), 400
 
-    # # Sprawdź, czy użytkownik, któremu ma być przypisane zadanie, jest członkiem zespołu
-    # assigned_user = User.query.filter_by(email=assigned_to_email).first()
-    # if not assigned_user:
-    #     return jsonify({'message': 'Użytkownik o podanym adresie e-mail nie istnieje'}), 404
-    #
-    # team_member = TeamMember.query.filter_by(team_id=team.id, user_id=assigned_user.id).first()
-    # if not team_member:
-    #     return jsonify({'message': 'Użytkownik nie jest członkiem tego zespołu'}), 403
-    #
-    # new_task = Task(team_id=team_id, assigned_to_user=assigned_user.id, content=content)
-    # db.session.add(new_task)
-    # db.session.commit()
-
-
-    #Przypisane zadania do każdego ucznia
+    # Przypisane zadania do każdego ucznia
     for emails in assigned_to_email:
+        print(assigned_to_email)
         assigned_user = User.query.filter_by(email=emails).first()
         if not assigned_user:
             return jsonify({'message': 'Użytkownik o podanym adresie e-mail nie istnieje'}), 404
@@ -242,7 +267,7 @@ def create_task(current_user, team_id):
         if not team_member:
             return jsonify({'message': 'Użytkownik nie jest członkiem tego zespołu'}), 403
 
-        new_task = Task(team_id=team_id, assigned_to_user=assigned_user.id, content=content)
+        new_task = Task(team_id=team_id, assigned_to_user=assigned_user.id, content=content, status="Nie zwrócono")
         db.session.add(new_task)
 
     db.session.commit()
@@ -278,6 +303,52 @@ def update_task(current_user, team_id, task_id):
     return jsonify({'message': 'Zadanie zostało zaktualizowane'}), 200
 
 
+@app.route('/teams/<int:team_id>/tasks/<int:task_id>/submit', methods=['POST'])
+@token_required
+def submit_task(current_user, team_id, task_id):
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({'message': 'Zadanie o podanym identyfikatorze nie istnieje'}), 404
+
+    if task.assigned_to_user != current_user.id:
+        return jsonify({'message': 'Nie jesteś przypisanym użytkownikiem tego zadania'}), 403
+
+    if 'file' not in request.files:
+        return jsonify({'message': 'Brak pliku w żądaniu'}), 400
+
+    file = request.files['file']
+    print(f"Plik z request {file}")
+    print(f'Ścieżka do zapisu {app.config["UPLOAD_FOLDER"]}')
+
+    if file.filename == '':
+        return jsonify({'message': 'Brak wybranego pliku'}), 400
+
+    # Sprawdzenie czy katalog uploads istnieje. Jeżeli nie to utwórz go
+    if not os.path.exists(app.config['UPLOAD_FOLDER']):
+        print(f'Katalog nie istnieje. Tworzę katalog...')
+        os.makedirs(app.config["UPLOAD_FOLDER"])
+    else:
+        print("Katalog już istnieje")
+
+    if file and allowed_file(file.filename):
+        print("Próba zapisu pliku")
+        filename = secure_filename(file.filename)
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        try:
+            file.save(file_path)
+            print("Plik zapisano pomyślnie")
+        except Exception as save_error:
+            print(f"Błąd zapisu {save_error}")
+
+        task.status = 'Zwrócono'
+        task.file = file_path
+        db.session.commit()
+
+        return jsonify({'message': 'Plik został przesłany i zadanie zostało zaktualizowane'}), 200
+    else:
+        return jsonify({'message': 'Nieprawidłowy format pliku'}), 400
+
+
 # Endpoint do usuwania zadania
 @app.route('/teams/<int:team_id>/<int:task_id>', methods=['DELETE'])
 @token_required
@@ -295,7 +366,54 @@ def delete_task(current_user, team_id, task_id):
     return jsonify({'message': 'Zadanie zostało usunięte'}), 200
 
 
+# Endpoint do wystawiania oceny za zadanie
+@app.route('/teams/<int:team_id>/tasks/<int:task_id>/grade', methods=['POST'])
+@token_required
+def grade_task(current_user, team_id, task_id):
+    if not current_user.teacher:
+        return jsonify({'message': 'Nie masz uprawnień do wystawiania oceny'})
+
+    task = Task.query.get(task_id)
+    if not task:
+        return jsonify({'message': 'Zadanie o podanym identyfikatorze nie istnieje'}), 404
+
+    if task.team_id != team_id:
+        return jsonify({'message': 'Zadanie nie należy do tego zespołu'}), 403
+
+    if task.status != 'Zwrócono':
+        return jsonify({'message': 'Zadanie nie zostało jeszcze zwrócone przez ucznia'}), 400
+
+    data = request.get_json()
+    grade = data.get('grade')
+
+    if not grade:
+        return jsonify({'message': 'Brak oceny w żądaniu'}), 400
+
+    task.status = 'Oceniono'
+    task.grade = grade
+    db.session.commit()
+
+    return jsonify({'message': f'Ocena za zadanie {task_id} została wystawiona: {grade}'}), 200
+
+
 """ ---------- Pobieranie zadań ---------- """
+
+
+@app.route('/teams/<int:team_id>/tasks/<int:task_id>/download', methods=['GET'])
+@token_required
+def download_task_file(current_user, team_id, task_id):
+    task = Task.query.get(task_id)
+
+    if not task:
+        return jsonify({'message': 'Zadanie o podanym identyfikatorze nie istnieje'}), 404
+
+    if not current_user.teacher:
+        return jsonify({'message': 'Nie masz uprawnień do pobierania plików'}), 403
+
+    # if task.status != 'Zwrócono' or task.status != 'Oceniono':
+    #     return jsonify({'message': 'Zadanie nie zostało jeszcze zwrócone przez ucznia'}), 400
+
+    return send_file(task.file, as_attachment=True)
 
 
 # Endpoint do pobierania wszystkich zadań w obrębie zespołu (dla nauczyciela)

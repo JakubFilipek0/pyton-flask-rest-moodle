@@ -35,5 +35,8 @@ class Task(db.Model):
     team_id = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=False)
     assigned_to_user = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     content = db.Column(db.String(200), nullable=False)
+    status = db.Column(db.String(50), nullable=False)
+    file = db.Column(db.String, nullable=True)
+    grade = db.Column(db.String, nullable=True)
     team = db.relationship('Team', foreign_keys=team_id)
     assigned_user = db.relationship('User', foreign_keys=assigned_to_user)
